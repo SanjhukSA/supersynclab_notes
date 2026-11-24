@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:match*",
+      "destination": "https://YOUR-RENDER-API-URL.onrender.com/api/:match*"
+    },
+    {
+      "source": "/storage/:match*",
+      "destination": "https://YOUR-RENDER-API-URL.onrender.com/storage/:match*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
