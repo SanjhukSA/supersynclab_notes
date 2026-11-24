@@ -1,0 +1,233 @@
+# Progress Tracker
+
+Update this file after every meaningful implementation change.
+
+## Current Phase
+
+- **Milestone 1 (Units 1 through 6): Complete**.
+- **Milestone 2 (Multimodal OCR, LaTeX Reconstruction, Folders, and Study Workflows): Complete**.
+- **Milestone 3 (Cross-Note Synthesis, Collaborative Sharing, and Cloud Sync): Complete**.
+
+## Current Goal
+
+- Milestone 4: Hybrid RAG Answers (Notes + AI Knowledge) — Complete.
+
+## Next Up: Personalization (Separate Units)
+
+- Student profile (university, course, semester, preferred depth) added to prompt.
+- Exam-style answers (2-mark, 5-mark, 10-mark formats).
+- Coverage gaps ("your notes cover X and Y, but not Z") with interactive explanation triggers.
+- PYQ weighting for topics appearing frequently in past papers.
+- Student relevance feedback loop.
+
+## Completed
+
+- **Unit C: Sentence-Aware Chunk Boundaries**
+  - Engineered sentence-aware chunking in `apps/api/services/chunker.py` using abbreviation protection, math masking (`$...$`, `$$...$$`), decimal protection, and sentence-boundary packing.
+  - Implemented `merge_short_lines()` to coalesce fragmented slide deck and narrow column wraps into cohesive paragraphs while preserving headings and bullet lists.
+  - Implemented `stitch_page_texts()` and `chunk_document()` resolving cross-page sentence fragmentation so trailing and leading clause splits across page boundaries are cleanly rejoined.
+  - Preserved page number and proportional vertical bounding box coordinates (`bbox_x`, `bbox_y`, `bbox_width`, `bbox_height`) for all child chunks.
+  - Created standalone re-indexing script (`apps/api/scripts/reindex_notes.py`) and successfully re-indexed all existing database notes, eliminating 100% of mid-sentence chunk starts (0 mid-sentence chunks in `Neural-Networks.pdf`).
+  - Added unit test `test_unit_c_sentence_aware_chunking_and_reindexing` verifying boundary snapping, heading preservation, page number/bbox tracking, and live database chunk updates.
+
+- **Unit B: Retrieval Tuning for Broad Questions**
+  - Added question-intent stopwords (`explain`, `describe`, `define`, `what`, `is`, `are`, `tell`, `about`, `discuss`, `overview`, `summary`, etc.) to filter intent commands from topic terms.
+  - Implemented query expansion via `expand_retrieval_queries()` in `client.py` and `rag.py` to retrieve across multiple topic facets (definitions, architecture, components, applications).
+  - Raised candidate limit for broad inquiries (`effective_top_k = max(top_k, 8)` with up to 40 keyword and 35 vector candidates across multiple pages).
+  - Implemented definition-like chunk boosting (+0.45 boost for "is a", "is defined as", "refers to" and +0.30 for heading topic openers) so definitions rank above passing mentions.
+  - Implemented real LLM relevance reranker `rerank_passages_with_llm()` with heuristic scoring fallback.
+  - Added detailed logging of retrieved chunks displaying rank, note title, page number, hybrid score, cosine distance, and snippet preview.
+  - Added unit test `test_retrieval_tuning_broad_questions_and_user_scoping` confirming multi-page retrieval, definition ranking, detailed logging, and strict cross-user data isolation.
+
+- **Unit A: Hybrid Answer Generation**
+  - Added `mode` field (`hybrid`, `notes_only`, `ai_only`) to `SendMessageRequest` schema, backend router, and frontend state.
+  - Implemented the hybrid system prompt blending general knowledge as the backbone with the student's notes for terminology and citations.
+  - In `hybrid` mode with empty context, generates answer from general knowledge while explicitly stating the topic was not in the student's notes (never outputs "Not covered in your uploaded notes.").
+  - Retained strict grounding and deterministic guardrail ("Not covered in your uploaded notes.") for `notes_only` mode.
+  - Enhanced frontend markdown rendering: bold (`**`), italic (`*`), code (` `), blockquotes (`> `), headers (`### `), and bullet points (`- `) formatted cleanly without showing raw asterisks for file names, while preserving interactive `<CitationBadge>` click-to-preview triggers.
+  - Added 3-mode segmented selector in `ChatPanel.tsx` (`⚡ Hybrid`, `📚 Notes Only`, `✨ AI Only`) defaulting to Hybrid.
+  - Added automated unit tests in `apps/api/tests/test_chat.py` verifying all 3 modes and fallback handling.
+
+- **Unit 0: Find and Fix Raw-Chunk Fallback**
+  - Diagnosed fallback: `_call_llm_text` failed when API key was invalid or unreachable, causing `generate_answer` to emit a template with a raw child chunk starting mid-sentence.
+  - Enhanced error logging: full exception type and cause now logged via `logger.error` with stack trace.
+  - Fixed fallback: never outputs fake generated answers or mid-sentence child chunks; now displays a clear notice ("The AI model is unavailable right now (Reason)") followed by the relevant full parent chunk as a blockquote excerpt with valid `[cite:1]` link.
+  - Added unit test suite in `apps/api/tests/test_chat.py` verifying both normal LLM path and forced failure unavailable notice.
+
+- **Unit 1: Scaffold & Auth**
+  - Monorepo folder structure created (`apps/api/`, `apps/web/`, `storage/`)
+  - Backend scaffolded in `apps/api`: Pydantic Settings, SQLAlchemy models, asyncpg, Alembic migrations, Clerk auth verification, health checks.
+  - Frontend scaffolded in `apps/web`: React + Vite + TypeScript (strict mode), full paper/ink theme system, Fraunces serif typography, ThemeToggle, Clerk auth wrapper with Preview Mode.
+  - Infrastructure: Docker Compose with PostgreSQL 16 (pgvector) on port 5433 and Redis 7 on 6379.
+- **Unit 2: Storage Service & Notes API / UI**
+  - Backend Storage Service (`apps/api/services/storage.py`): secure streaming to disk under `storage/notes/`, MIME type/size validation, path abstraction.
+  - Notes API router (`apps/api/routers/notes.py`): upload, list, status, and delete endpoints.
+  - Frontend Notes Library: `UploadDropzone.tsx`, `NoteList.tsx`, TanStack Query hooks, dynamic count in Sidebar.
+- **Unit 3: Ingestion Worker & Page Extraction**
+  - Document Parser (`apps/api/services/parser.py`): PyMuPDF digital PDF text extraction and high-res 150 DPI page image rendering saved to disk under `storage/pages/{note_id}/`.
+  - Hierarchical Chunker (`apps/api/services/chunker.py`): creates parent chunks (600-800 words) and child chunks (150-200 words with overlap) referencing parent IDs.
+  - Provider-agnostic LLM interface (`apps/api/llm/client.py`): generates 768-dim embeddings in `pgvector` with deterministic local fallback when API key is pending.
+  - Ingestion pipeline (`apps/api/services/ingestion.py`): automatic background execution on upload, transitions note status `pending` -> `processing` -> `ready`.
+  - Re-process endpoint (`POST /api/v1/notes/{id}/process`) and page list endpoint (`GET /api/v1/notes/{id}/pages`).
+  - Frontend live updates: auto-polling in `useNotes` while pending/processing, "Process" button for queued notes, and note inspection modal with rendered page thumbnails.
+- **Unit 4: Chat Endpoint & RAG Engine**
+  - Hierarchical Retrieval Service (`apps/api/services/rag.py`): `pgvector` cosine similarity search over child chunks with parent-context join, distance thresholding (0.65), and strict user scoping (`owner_id == user.id`).
+  - Grounded LLM Client (`apps/api/llm/client.py`): `generate_answer()` with prompt engineering enforcing strict citation grounding (`[cite:N]`), LaTeX math formatting (`$...$`, `$$...$$`), and the deterministic guardrail ("Not covered in your uploaded notes.").
+  - Chat Schemas & Router (`apps/api/schemas/chat.py`, `apps/api/routers/chat.py`): endpoints for creating chats, listing chats, retrieving message history with citations, sending messages, and deleting chats.
+  - Backend Chat Tests (`apps/api/tests/test_chat.py`): test suite for chat lifecycle, guardrail path, citation extraction, and cross-user data isolation.
+  - Frontend Chat Hooks (`apps/web/src/features/chat/useChat.ts`): TanStack Query hooks for `useChats()`, `useChat()`, `useCreateChat()`, `useSendMessage()`, and `useDeleteChat()`.
+  - Frontend Chat UI (`apps/web/src/features/chat/`):
+    - `CitationBadge.tsx`: vintage margin stamp badge using `--accent-highlight` tokens with page number and hover snippet preview.
+    - `ChatMessageItem.tsx`: user/assistant bubble styles, inline `[cite:N]` parser, LaTeX math formatting, and guardrail notice with an optional external knowledge fallback.
+    - `ChatPanel.tsx`: full-height study desk chat view with suggested prompts, live response indicator, and external knowledge toggle.
+    - Navigation integration in `Sidebar.tsx` and `AppShell.tsx`: seamless switching between Notes Library and Study Chat.
+- **Unit 5: Split-Screen Page Viewer & Bounding Box Highlighting**
+  - Backend Citation Metadata: extended `CitationResponse`, `RetrievedContext`, and `GeneratedCitation` with `note_id`, `page_image_path`, and normalized bounding box coordinates (`bbox_x`, `bbox_y`, `bbox_width`, `bbox_height`).
+  - Highlighter Pen Overlay (`apps/web/src/features/viewer/HighlighterOverlay.tsx`): warm ochre highlighter pen effect (`--accent-highlight`), soft outer glow, "Cited Source" margin pin, and smooth auto-scrolling to cited coordinates.
+  - Page Canvas (`apps/web/src/features/viewer/PageViewer.tsx`): zoom controls (Fit-Width, 50% to 250%), page flipping (`<` / `>`), page counter, and bounding box integration.
+  - Split-Screen Panel (`apps/web/src/features/viewer/SplitScreenViewerPanel.tsx`): slide-in verification drawer displaying source document title, page canvas, and verbatim cited passage quote card.
+  - Three-Region Layout Integration (`apps/web/src/components/layout/AppShell.tsx`): clicking any citation badge in chat or "View Pages" in the library opens the split-screen viewer side-by-side.
+- **Unit 6: Art Direction Refinements & Editorial Polish**
+  - Reusable Editorial Ornaments (`apps/web/src/components/editorial/`):
+    - `OrnamentalDivider.tsx`: double hairline dividers with etched fleuron, section, and diamond ornaments.
+    - `DropCap.tsx`: Fraunces illuminated manuscript initial letters with double border woodblock frames.
+    - `VintageEngraving.tsx`: vector SVG illustration of study ledger, feather quill, and celestial geometry drawn in palette tokens.
+    - `CornerFlourish.tsx`: vintage woodcut corner brackets framing cards, dropzones, and modals.
+  - Applied Old-Art Aesthetic:
+    - Library empty state (`LibraryEmptyState.tsx`) with vintage study engraving and hallmark badges.
+    - Chat desk background & empty state (`ChatPanel.tsx`) with Raphael's _The School of Athens_ fresco watermark, soft paper vignette, and curated study inquiries.
+    - Header and navigation ledger styling (`TopBar.tsx`, `Sidebar.tsx`, `AppShell.tsx`).
+- **Milestone 2: Multimodal OCR, Classification, Folders & Study Workflows**
+  - **OpenCV Preprocessing Pipeline (`apps/api/services/image_processor.py`)**:
+    - Deskewing algorithm computing minimum area bounding rectangle of contours and correcting rotation up to $\pm 45^\circ$.
+    - Shadow removal via median blur illumination estimation and background normalization.
+    - Adaptive thresholding and unsharp masking for phone camera snaps of student notes.
+  - **Cost-Aware Document Routing (`apps/api/services/parser.py`)**:
+    - Digital text pages extracted via PyMuPDF with 0 external API calls.
+    - Low-density scanned/handwritten pages ($\le 40$ characters) preprocessed with OpenCV and transcribed via Gemini Vision OCR (`ocr_image_with_latex`).
+  - **Automatic Subject & Topic Classification (`apps/api/services/ingestion.py`, `apps/api/llm/client.py`)**:
+    - Auto-classifies notes into academic subject (Physics, Mathematics, CS, Biology), topic, comma-separated tags, and high-yield 2-sentence summary.
+    - Displayed with editorial subject badges on notes in `NoteList.tsx`.
+  - **Folder Management System (`apps/api/routers/folders.py`, `apps/web/src/features/folders/`)**:
+    - Complete CRUD endpoints: create folder, list folders with live note counts, rename/move folder, and delete folder (unfiling contained notes).
+    - Note update endpoint (`PATCH /api/v1/notes/{id}`) for folder assignment and metadata updates.
+    - Sidebar folder tree with inline folder creation, count indicators, and click-to-filter in `Sidebar.tsx`.
+  - **1-Page High-Yield Cheat Sheets (`apps/api/routers/study.py`, `apps/web/src/features/study/CheatSheetModal.tsx`)**:
+    - Generates concise 1-page cramming summary distilling core laws, LaTeX formulas ($$...$$), and exam traps.
+    - Parchment-styled modal with drop cap typography, markdown formatting, copy-to-clipboard, and print preview.
+  - **Active-Recall Practice Quizzes (`apps/api/routers/study.py`, `apps/web/src/features/study/QuizModal.tsx`)**:
+    - Dynamic multiple-choice questions grounded in note concepts.
+    - Instant answer checking with emerald/crimson feedback, detailed explanations, live score tracking, and restart options.
+  - **Multimodal Study Chat (`apps/api/routers/chat.py`, `apps/web/src/features/chat/ChatPanel.tsx`)**:
+    - Direct camera / snap attachment for exam questions and handwritten problem snaps.
+    - Image decoding, vision OCR transcription, and prompt augmentation for grounded answer generation.
+  - **BYOK (Bring Your Own Key) & Multi-LLM Provider Engine (`apps/api/llm/client.py`, `apps/web/src/features/settings/`)**:
+    - Multi-provider client abstraction supporting Google Gemini (`gemini-1.5-flash-latest`, `gemini-2.0-flash`, `gemini-1.5-pro-latest`, `gemini-1.5-flash-002`), OpenAI / ChatGPT (`gpt-4o-mini`, `gpt-4o`), and Anthropic / Claude (`claude-3-5-haiku`, `claude-3-5-sonnet`).
+    - Dynamic model candidate discovery and version fallback resolving deprecated bare model names (`gemini-1.5-flash` -> `gemini-1.5-flash-latest`, `gemini-1.5-flash-002`, `gemini-2.0-flash`) with `ModelService.ListModels` detection, preventing 404/unsupported model errors.
+    - Real-time connection testing (`POST /api/v1/settings/test-connection`) with instant feedback before saving.
+    - Dual persistence model: saved to PostgreSQL `user_settings` table for authenticated accounts, with immediate `localStorage` caching and `X-LLM-*` header forwarding.
+    - Editorial `SettingsModal.tsx` accessible via TopBar gear button, Sidebar shortcut, and Chat desk active model pill.
+    - "Reset to Server Default" option to revert easily to server-side `.env` defaults.
+  - **Milestone 3A: Multi-Document Cross-Note Synthesis & Scoped Study Desks**:
+    - **Scoped Retrieval RAG Pipeline (`apps/api/services/rag.py`, `apps/api/routers/chat.py`)**:
+      - Retrieval supports optional filtering by `note_ids` or `folder_id`, expanding candidate count (`top_k=8`) for cross-document synthesis.
+      - User ownership strictly enforced (`Note.owner_id == user.id`).
+    - **Cross-Document Synthesis Endpoints (`apps/api/routers/study.py`, `apps/api/schemas/study.py`)**:
+      - `POST /api/v1/study/synthesize/cheatsheet`: synthesizes an integrated 1-page cheat sheet across multiple notes or an entire course folder with source attribution.
+      - `POST /api/v1/study/synthesize/quiz`: synthesizes active-recall exam practice questions across multiple notes.
+    - **Interactive Scope Selector (`apps/web/src/features/chat/ScopeSelector.tsx`, `ChatPanel.tsx`)**:
+      - Header pill dropdown allowing students to scope study chat to _All Notes_, a specific _Course Folder_, or _Hand-picked Notes_.
+      - Seamless `note_ids` and `folder_id` forwarding with grounded multi-document citations (`[Note Title, p. X]`).
+    - **Multi-Selection & Batch Action Ledger (`apps/web/src/features/notes/NoteList.tsx`)**:
+      - Checkbox selection mode on note cards with "Select All" in folder.
+      - Action Ledger Bar offering 1-click **Synthesize Cheat Sheet**, **Practice Exam**, and **Study Desk** directly into chat.
+    - **Synthesized Study Modals (`CheatSheetModal.tsx`, `QuizModal.tsx`)**:
+      - Displays synthesized source stamps listing all course notes included in the synthesis.
+  - **Milestone 3B: Collaborative Sharing & Read-Only Study Desks**:
+    - **Database & Persistence (`ShareLink` model, migration `b2c3d4e5f6g7`)**:
+      - Public share links with cryptographically secure 16-byte tokens, view counters, expiration dates, and role support (`viewer`, `editor`).
+      - Peer share grants for fine-grained direct student collaboration.
+    - **Sharing API Router (`apps/api/routers/sharing.py`, `apps/api/schemas/sharing.py`)**:
+      - `POST /api/v1/share/links`: Generates public link for any note, chat session, or course folder.
+      - `GET /api/v1/share/public/{token}`: Unauthenticated endpoint serving full study note scans, bounding-box citations, and study chat transcripts with 0 login friction for classmates.
+      - `POST /api/v1/share/grants`: Issues direct peer access grants.
+    - **Academic Sharing UI (`apps/web/src/features/sharing/`)**:
+      - `ShareModal.tsx`: Academic parchment modal with 1-click token copy, link expiry info, and direct peer sharing invite field.
+      - `SharedStudyDesk.tsx`: Full public study desk page rendered at `/share/:token`, allowing classmates to inspect notes, rendered page scans, and study chat messages with no login required.
+      - Share button integration on note cards in `NoteList.tsx` and active study session header in `ChatPanel.tsx`.
+  - **Milestone 3C: Real Google Drive & Google Classroom Cloud Sync**:
+    - **Real Cloud Ingestion Service (`apps/api/services/google_sync.py`, `apps/api/schemas/google_sync.py`)**:
+      - Replaced all mock/synthetic files with real Google Drive v3 REST API and Google Classroom API integration.
+      - Real interactive folder and file browsing with parent-child navigation, search queries, and MIME type handling.
+      - Binary streaming: downloads exact binary bytes for PDFs, images, and text notes (`/files/{id}?alt=media`), and exports Google Docs/Slides into standard A4 PDFs (`/files/{id}/export?mimeType=application/pdf`).
+      - Ingestion pipeline: streams real files to disk storage, registers `Note` in Postgres, and triggers background `ingestion_service` for 150 DPI page rendering and vector embedding.
+    - **Cloud Sync Router (`apps/api/routers/google_sync.py`)**:
+      - `GET /api/v1/integrations/google/status`: Validates token against Google UserInfo API.
+      - `GET /api/v1/integrations/google/drive/browse`: Live folder hierarchy, breadcrumbs, search, and pagination.
+      - `GET /api/v1/integrations/google/classroom/courses`: Real active student courses.
+      - `GET /api/v1/integrations/google/classroom/courses/{course_id}/materials`: Real coursework attachments.
+      - `POST /api/v1/integrations/google/import`: Batch downloads real documents, creates optional course subfolders, and spawns ingestion tasks.
+    - **Interactive Cloud Explorer UI (`apps/web/src/features/integrations/`)**:
+      - `GoogleImportModal.tsx`:
+        - Dual connection options: Google Identity Services (GIS) 1-click connect or instant OAuth token input with Google OAuth Playground guide.
+        - Real Google Drive Explorer: breadcrumb bar (`My Drive > Folder > Subfolder`), folder navigation, search, and "Select All Notes in Folder".
+        - Real Google Classroom Explorer: course tabs and assignment attachments.
+        - SuperNotes target folder routing with optional subfolder creation matching the Drive folder name.
+      - Trigger points: TopBar "Cloud Sync" button and UploadDropzone "Import from Google Drive / Classroom" trigger.
+  - **Hybrid RAG Retrieval & Ingestion Pipeline Fix**:
+    - **Alembic Database Migration**: Upgraded postgres database from `f38490b4da20` to `head` (`b2c3d4e5f6g7`), properly generating `user_settings` and `share_links` tables.
+    - **Hybrid Search Engine (`apps/api/services/rag.py`)**:
+      - Combined keyword search (case-insensitive term and exact-phrase matching via `ILIKE`) with vector similarity.
+      - Implemented composite hybrid scoring: `0.5 * keyword_overlap + 0.3 * vector_similarity + 0.5 (phrase bonus)`.
+      - Resolved guardrail false-positives: direct textual keyword and phrase matches are never discarded by vector distance cutoffs.
+    - **Provider & Key Propagation (`apps/api/llm/client.py`, `apps/api/routers/chat.py`, `apps/api/services/ingestion.py`)**:
+      - Propagated active `LLMConfig` (user API keys and provider) through `generate_embedding`, `retrieve_relevant_context`, and `ingestion_service`.
+  - **Milestone 4A: Word (.docx) & PowerPoint (.pptx) Slide Deck Ingestion**:
+    - **Native Office Ingestion Pipeline (`apps/api/services/parser.py`, `apps/api/services/storage.py`)**:
+      - Integrated `python-docx` and `python-pptx` with size limits (DOCX: 25MB, PPTX: 35MB).
+      - Structured text extraction from Word headings, paragraphs, and tables, chunked into logical pages (~380 words).
+      - Presentation slide-to-page mapping (`page_number = slide_idx + 1`), capturing slide titles, text boxes, and speaker notes.
+      - Generated 150 DPI page scan images via PyMuPDF (`fitz`) saved to `storage/pages/{note_id}/page_{n}.png` matching paper/ink aesthetic for split-screen viewer compatibility.
+    - **UI Upload & Library Badges (`UploadDropzone.tsx`, `NoteList.tsx`)**:
+      - Drag-and-drop support for `.docx` and `.pptx` alongside `.pdf` and image snaps.
+      - Display of `DOCX` and `PPTX` badges in the notes ledger.
+  - **Milestone 4B: Global Search & Spotlight Command Palette (`Ctrl+K` / `Cmd+K`)**:
+    - **Backend Global Search Engine (`apps/api/routers/notes.py`, `apps/api/schemas/notes.py`)**:
+      - Endpoint `GET /api/v1/notes/search?q={query}` scoped strictly to the authenticated user.
+      - Unified search querying across note titles, subjects, topics, tags, and chunk text (`ILIKE`).
+      - Centered verbatim snippet extraction with matching phrase bounding context and page mapping.
+      - Relevance ranking prioritizing title/subject matches followed by content chunk matches.
+    - **Frontend Spotlight Command Palette (`apps/web/src/features/search/GlobalSearchModal.tsx`, `TopBar.tsx`, `AppShell.tsx`)**:
+      - Global shortcut listener (`Ctrl+K` / `Cmd+K` / `Esc` to toggle).
+      - TopBar interactive search bar with `Ctrl K` keyboard shortcut pill.
+      - Debounced query input with matching keyword highlight badges (`<mark>`).
+      - Instant actions: jump to exact cited page in Split-Screen Viewer, launch AI Study Desk scoped to note, or trigger new uploads.
+      - Quick actions and recent notes display on empty query.
+  - **Milestone 4C: Custom Brand Assets & UI Decluttering**:
+    - Integrated custom SVG vector icons from `apps/web/public/assets/` (`Logo.svg`, `nav-notes.svg`, `nav-chat.svg`, `nav-settings.svg`) into `Sidebar.tsx` with light/dark mode adaptation.
+    - Added `Logo.svg` as favicon in `index.html`.
+    - Removed extraneous subtitles, badges (`v1.0`, `BYOK`, `Grounded RAG`, active LLM model pill `GEMINI: ...`, and TopBar `Ctrl K` search badge), and the guardrail alert banner.
+    - Removed teal section mark (`§`) from `Study Library`, `ChatPanel`, and `SharedStudyDesk` headers for a clean typography layout.
+    - Updated Scope Selector: renamed `RETRIEVAL SCOPE` header to `ADD CONTEXT`, and replaced generic globe icon in `All Notes` with the workspace vector logo (`/assets/nav-notes.svg`).
+    - TopBar decluttering: removed text from "Cloud Sync" button to keep only its icon, and removed the duplicate gear settings icon from TopBar (retaining Settings in the sidebar).
+    - Chat desk welcome card: renamed heading to "Ask Superbot", replaced the vintage engraving icon with the custom vector bot logo (`/assets/Superbot.svg`), and removed the verbose hallucination guardrail description paragraph.
+    - AI message avatar: replaced the generic Lucide bot icon with the custom `Superbot.svg` logo in chat message items.
+    - Set `allow_external: true` by default so the AI provides direct helpful academic answers for general queries.
+- **Quality Gates Verification**:
+  - `ruff check apps/api` passed (0 errors, strict 100-character line limit)
+  - `pytest apps/api/tests` passed (16 passed, 0 failures)
+  - `tsc --noEmit` and `npm run build` passed (strict mode, 0 errors, production build created)
+  - Database schema: `b2c3d4e5f6g7 (head)` applied
+
+## Architecture Decisions
+
+- PC-first web app (React + Vite + TypeScript): fastest path to a working product; mobile comes later.
+- FastAPI backend: the pipeline relies on Python libraries (PyMuPDF, OpenCV, reranking models).
+- Postgres with pgvector for metadata, vectors, and keyword search: one datastore keeps hybrid search simple.
+- Local disk for file storage: no cost and no hosting dependency while building; accessed only through a storage service so it can be swapped later.
+- Redis job queue: ingestion is too slow for a request handler and must run in a worker.
+- Gemini free tier for LLM and vision: zero cost while building; all calls go through `apps/api/llm/` so the provider can be swapped.
+- Cost-aware vision routing: native digital pages incur 0 vision cost; only handwritten/scanned pages trigger Gemini Vision.
+- Clerk for auth: handles sign-in and Google OAuth, which is also needed for Drive and Classroom linking.
+- Sharing uses two roles, Viewer (read-only) and Editor, both able to download, like Google Drive.
+- Light and dark themes from day one, with an old-art inspired look (see `ui-context.md`).

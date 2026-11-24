@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: supernotes-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: supernotes
+      POSTGRES_PASSWORD: supernotes
+      POSTGRES_DB: supernotes
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: supernotes-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:

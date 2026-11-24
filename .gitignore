@@ -1,0 +1,34 @@
+# ── Environment & secrets ─────────────────────────────────────────────────
+.env
+
+# ── Python ────────────────────────────────────────────────────────────────
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# ── Node / Frontend ──────────────────────────────────────────────────────
+node_modules/
+apps/web/dist/
+apps/web/.vite/
+
+# ── Storage (uploaded files) ─────────────────────────────────────────────
+storage/*
+!storage/.gitkeep
+
+# ── Database (old SQLite, no longer used) ────────────────────────────────
+*.sqlite3
+chroma_store/
+
+# ── IDE ───────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── OS ────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db

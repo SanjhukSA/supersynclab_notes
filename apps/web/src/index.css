@@ -1,0 +1,82 @@
+/*
+ * Theme tokens from ui-context.md
+ *
+ * Light theme: calm paper tones — warm, study-desk feel
+ * Dark theme: ink tones — deep, warm dark mode
+ *
+ * The theme is toggled by setting data-theme="light"|"dark" on <html>.
+ * On first load we check the OS preference (prefers-color-scheme).
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Light theme (default) ────────────────────────────────────────────── */
+:root,
+[data-theme="light"] {
+  --bg-base: #f5f0e6;
+  --bg-surface: #fffbf3;
+  --bg-raised: #efe8da;
+  --text-primary: #2b2824;
+  --text-muted: #7a7367;
+  --accent-primary: #4f7355;
+  --accent-highlight: #d99a1e;
+  --border-default: #ddd4c3;
+  --state-error: #b5483a;
+  --state-success: #7a8f2e;
+}
+
+/* ── Dark theme ───────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg-base: #1a1917;
+  --bg-surface: #24221f;
+  --bg-raised: #2e2b27;
+  --text-primary: #ede7da;
+  --text-muted: #9c9588;
+  --accent-primary: #8fb596;
+  --accent-highlight: #e8b94f;
+  --border-default: #3a3732;
+  --state-error: #e07a6b;
+  --state-success: #a3b85c;
+}
+
+/* ── Base resets ──────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-bg-base text-text-primary font-sans antialiased;
+    /* Subtle paper-grain texture — a very faint noise overlay */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='4' height='4' fill='none'/%3E%3Crect width='1' height='1' fill='%23000' opacity='0.02'/%3E%3C/svg%3E");
+  }
+
+  /* Headings use the serif display font for an editorial feel */
+  h1, h2, h3 {
+    @apply font-display;
+  }
+}
+
+/* ── Scrollbar styling (subtle, matches theme) ────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ── Gentle transitions for theme switching ───────────────────────────── */
+body,
+.theme-transition {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
