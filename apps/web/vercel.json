@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/api/:match*",
-      "destination": "https://YOUR-RENDER-API-URL.onrender.com/api/:match*"
+      "destination": "https://https://supersynclab-notes.onrender.com.onrender.com/api/:match*"
     },
     {
       "source": "/storage/:match*",
-      "destination": "https://YOUR-RENDER-API-URL.onrender.com/storage/:match*"
+      "destination": "https://https://supersynclab-notes.onrender.com.com/storage/:match*"
     },
     {
       "source": "/(.*)",
