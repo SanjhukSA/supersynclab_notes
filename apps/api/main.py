@@ -45,6 +45,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+@app.get("/")
+async def root():
+    return {"status": "ok", "app": "SuperNotes API", "docs": "/docs", "health": "/api/v1/health"}
+
+
 # ── CORS — allow the Vite dev server ──────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,

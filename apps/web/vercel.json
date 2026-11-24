@@ -1,12 +1,12 @@
 {
   "rewrites": [
     {
-      "source": "/api/:match*",
-      "destination": "https://supersynclab-notes.onrender.com/api/:match*"
+      "source": "/api/(.*)",
+      "destination": "https://supersynclab-notes.onrender.com/api/$1"
     },
     {
-      "source": "/storage/:match*",
-      "destination": "https://supersynclab-notes.onrender.com/storage/:match*"
+      "source": "/storage/(.*)",
+      "destination": "https://supersynclab-notes.onrender.com/storage/$1"
     },
     {
       "source": "/(.*)",
@@ -14,4 +14,3 @@
     }
   ]
 }
-
