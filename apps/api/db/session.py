@@ -18,12 +18,18 @@ from sqlalchemy.ext.asyncio import (
 from config import settings
 
 # Create the async engine — echo=False in production
+# statement_cache_size=0 disables prepared statement caching for Supabase/PgBouncer poolers
 engine = create_async_engine(
     settings.database_url,
     echo=False,
     pool_size=10,
     max_overflow=20,
+    connect_args={
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    },
 )
+
 
 # Session factory — each call produces a new AsyncSession
 async_session_factory = async_sessionmaker(
