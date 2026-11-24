@@ -11,7 +11,7 @@ from pathlib import Path
 
 from alembic import context
 from sqlalchemy import pool, text
-from sqlalchemy.ext.asyncio import async_engine_from_config
+from sqlalchemy.ext.asyncio import create_async_engine
 
 # Add the api directory to the Python path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -21,8 +21,8 @@ from db.models import Base
 
 config = context.config
 
-# Set async database URL
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# Set async database URL (escape '%' to prevent configparser interpolation errors)
+config.set_main_option("sqlalchemy.url", settings.database_url.replace("%", "%%"))
 
 target_metadata = Base.metadata
 
@@ -50,9 +50,8 @@ def do_run_migrations(connection):
 
 async def run_async_migrations():
     """Run migrations in 'online' mode with asyncpg."""
-    connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
+    connectable = create_async_engine(
+        settings.database_url,
         poolclass=pool.NullPool,
     )
 
