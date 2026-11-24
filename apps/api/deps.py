@@ -125,18 +125,57 @@ async def current_user(
     user = result.scalar_one_or_none()
 
     if user is None:
-        # First sign-in: auto-create the user from token claims
-        email_from_list = payload.get("email_addresses", [{}])[0].get("email_address", "")
-        email = payload.get("email") or email_from_list
+        # First sign-in: auto-create the user from token claims or Clerk API
+        email = payload.get("email")
+        if not email:
+            email_addrs = payload.get("email_addresses")
+            if (
+                isinstance(email_addrs, list)
+                and len(email_addrs) > 0
+                and isinstance(email_addrs[0], dict)
+            ):
+                email = email_addrs[0].get("email_address")
+
+        display_name = payload.get("name") or payload.get("first_name") or ""
+        avatar_url = payload.get("image_url") or payload.get("profile_image_url")
+
+        # If email is missing (standard Clerk session tokens omit email by default),
+        # fetch user profile from Clerk API if clerk_secret_key is configured
+        if (not email or not display_name) and settings.clerk_secret_key:
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(
+                        f"https://api.clerk.com/v1/users/{clerk_id}",
+                        headers={"Authorization": f"Bearer {settings.clerk_secret_key}"},
+                    )
+                    if resp.status_code == 200:
+                        clerk_user = resp.json()
+                        e_list = clerk_user.get("email_addresses", [])
+                        if e_list and not email:
+                            email = e_list[0].get("email_address")
+                        if not display_name:
+                            fn = clerk_user.get("first_name") or ""
+                            ln = clerk_user.get("last_name") or ""
+                            display_name = f"{fn} {ln}".strip() or clerk_user.get("username", "")
+                        if not avatar_url:
+                            avatar_url = clerk_user.get("image_url")
+            except Exception as e:
+                logger.warning(f"Could not fetch user details from Clerk REST API: {e}")
+
+        # Fallback to satisfy NOT NULL constraint on users.email
+        if not email:
+            email = f"{clerk_id}@clerk.user"
+
         user = User(
             clerk_id=clerk_id,
             email=email,
-            display_name=payload.get("name", payload.get("first_name", "")),
-            avatar_url=payload.get("image_url", payload.get("profile_image_url")),
+            display_name=display_name or None,
+            avatar_url=avatar_url or None,
         )
         db.add(user)
         await db.flush()  # assign the id without committing
-        logger.info(f"Auto-created user from Clerk: {clerk_id}")
+        logger.info(f"Auto-created user from Clerk: {clerk_id} ({email})")
 
     return user
 

@@ -25,7 +25,7 @@ class CitationResponse(BaseModel):
     bbox_y: float
     bbox_width: float
     bbox_height: float
-    created_at: datetime
+    created_at: datetime | None = None
 
 
 class MessageResponse(BaseModel):
@@ -36,7 +36,8 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     citations: list[CitationResponse] = Field(default_factory=list)
-    created_at: datetime
+    created_at: datetime | None = None
+
 
 
 class ChatResponse(BaseModel):

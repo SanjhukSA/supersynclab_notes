@@ -8,6 +8,7 @@ Retrieval and conversation data are strictly scoped to the authenticated user.
 import base64
 import logging
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -212,11 +213,13 @@ async def send_message(
     if req.image_data:
         display_content = f"📷 [Attached Problem Snap]\n{req.content}"
 
+    now = datetime.now(UTC)
     user_msg = Message(
         id=uuid.uuid4(),
         chat_id=chat_id,
         role="user",
         content=display_content,
+        created_at=now,
     )
     db.add(user_msg)
     await db.flush()
@@ -248,11 +251,13 @@ async def send_message(
     )
 
     # 4. Save assistant answer
+    now_ans = datetime.now(UTC)
     assistant_msg = Message(
         id=uuid.uuid4(),
         chat_id=chat_id,
         role="assistant",
         content=answer_text,
+        created_at=now_ans,
     )
     db.add(assistant_msg)
     await db.flush()
@@ -270,6 +275,7 @@ async def send_message(
             bbox_width=gc.bbox_width,
             bbox_height=gc.bbox_height,
             snippet=gc.snippet,
+            created_at=now_ans,
         )
         db.add(citation_obj)
         await db.flush()
@@ -289,7 +295,7 @@ async def send_message(
                 bbox_y=gc.bbox_y,
                 bbox_width=gc.bbox_width,
                 bbox_height=gc.bbox_height,
-                created_at=citation_obj.created_at,
+                created_at=citation_obj.created_at or now_ans,
             )
         )
 
@@ -298,6 +304,7 @@ async def send_message(
         chat.title = req.content[:35] + ("…" if len(req.content) > 35 else "")
 
     await db.commit()
+    await db.refresh(assistant_msg)
 
     return SendMessageResponse(
         chat_id=chat_id,
@@ -307,7 +314,7 @@ async def send_message(
             role="assistant",
             content=answer_text,
             citations=saved_citations,
-            created_at=assistant_msg.created_at,
+            created_at=assistant_msg.created_at or now_ans,
         ),
     )
 
